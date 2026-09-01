@@ -1,0 +1,42 @@
+{
+  "formatVersion": 2,
+  "initialized": true,
+  "current": {
+    "asOfDate": "2026-09-01",
+    "assets": [
+      { "id": "a1", "name": "Activo 1", "type": "other", "value": 10, "approximate": false },
+      { "id": "a2", "name": "Activo 2", "type": "other", "value": 10, "approximate": false },
+      { "id": "a3", "name": "Activo 3", "type": "other", "value": 10, "approximate": false },
+      { "id": "a4", "name": "Activo 4", "type": "other", "value": 10, "approximate": false },
+      { "id": "a5", "name": "Activo 5", "type": "other", "value": 10, "approximate": false }
+    ],
+    "debts": [
+      { "id": "d1", "name": "Deuda 1", "type": "other", "outstandingBalance": 1, "monthlyPayment": 0, "interestRate": 0, "endDate": "", "approximate": false },
+      { "id": "d2", "name": "Deuda 2", "type": "other", "outstandingBalance": 1, "monthlyPayment": 0, "interestRate": 0, "endDate": "", "approximate": false },
+      { "id": "d3", "name": "Deuda 3", "type": "other", "outstandingBalance": 1, "monthlyPayment": 0, "interestRate": 0, "endDate": "", "approximate": false },
+      { "id": "d4", "name": "Deuda 4", "type": "other", "outstandingBalance": 1, "monthlyPayment": 0, "interestRate": 0, "endDate": "", "approximate": false },
+      { "id": "d5", "name": "Deuda 5", "type": "other", "outstandingBalance": 1, "monthlyPayment": 0, "interestRate": 0, "endDate": "", "approximate": false },
+      { "id": "d6", "name": "Deuda 6", "type": "other", "outstandingBalance": 1, "monthlyPayment": 0, "interestRate": 0, "endDate": "", "approximate": false },
+      { "id": "d7", "name": "Deuda 7", "type": "other", "outstandingBalance": 1, "monthlyPayment": 0, "interestRate": 0, "endDate": "", "approximate": false },
+      { "id": "d8", "name": "Deuda 8", "type": "other", "outstandingBalance": 1, "monthlyPayment": 0, "interestRate": 0, "endDate": "", "approximate": false },
+      { "id": "d9", "name": "Deuda 9", "type": "other", "outstandingBalance": 1, "monthlyPayment": 0, "interestRate": 0, "endDate": "", "approximate": false },
+      { "id": "d10", "name": "Deuda 10", "type": "other", "outstandingBalance": 1, "monthlyPayment": 0, "interestRate": 0, "endDate": "", "approximate": false }
+    ],
+    "cashFlow": { "monthlyIncome": 0, "essentialExpenses": 0, "variableExpenses": 0, "monthlyInvestment": 0 }
+  },
+  "snapshots": [{
+    "id": "s1", "snapshotDate": "2026-09-01",
+    "assets": [{ "id": "sa1", "name": "Activo snapshot", "type": "other", "value": 10, "approximate": false }],
+    "debts": [],
+    "cashFlow": { "monthlyIncome": 0, "essentialExpenses": 0, "variableExpenses": 0, "monthlyInvestment": 0 }
+  }],
+  "goals": [
+    { "id": "g1", "name": "Objetivo 1", "metric": "netWorth", "operator": ">=", "targetValue": 1, "targetDate": "2027-01-01" },
+    { "id": "g2", "name": "Objetivo 2", "metric": "liquidity", "operator": ">=", "targetValue": 2, "targetDate": "2027-02-01" },
+    { "id": "g3", "name": "Objetivo 3", "metric": "totalDebt", "operator": "<=", "targetValue": 3, "targetDate": "2027-03-01" },
+    { "id": "g4", "name": "Objetivo 4", "metric": "investments", "operator": ">=", "targetValue": 4, "targetDate": "2027-04-01" },
+    { "id": "g5", "name": "Objetivo 5", "metric": "securityMonths", "operator": ">=", "targetValue": 5, "targetDate": "2027-05-01" }
+  ],
+  "settings": { "currency": "EUR", "locale": "es-ES", "theme": "dark", "healthRules": { "fragileMaxMonths": 1, "stableMinMonths": 3 } },
+  "metadata": { "createdAt": "2026-09-01T00:00:00.000Z", "updatedAt": "2026-09-01T00:00:00.000Z" }
+}

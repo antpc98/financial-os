@@ -5,6 +5,7 @@ globalThis.localStorage = { getItem: key => memory.get(key) ?? null, setItem: (k
 const { calculate, createSnapshot, health } = await import("../js/calculations.js");
 const { emptyState, importState, exportState, resetState } = await import("../js/storage.js");
 const { buildUiState } = await import("../js/ui-state.js");
+const { chartDate } = await import("../js/charts.js");
 
 const current = {
   asOfDate: "2026-01-01",
@@ -32,6 +33,7 @@ assert.deepEqual(ui.counts, { assets: 5, debts: 10, snapshots: 1, goals: 5 });
 assert.equal(ui.snapshots.length, 1); assert.equal(ui.goals.length, 5); assert.equal(ui.timeline.length, 6);
 assert.equal(ui.timeline.filter(item => item.kind === "real").length, 1); assert.equal(ui.timeline.filter(item => item.kind === "target").length, 5);
 assert.equal(ui.snapshots[0].displayMetrics.totalAssets, 50, "la UI debe recalcular métricas ausentes del snapshot");
+assert.equal(chartDate("2026-09-01"), "01/09/2026");
 assert.throws(() => importState("{no"), /JSON válido/); assert.throws(() => importState(JSON.stringify({ formatVersion: 2 })), /current/);
 const cleared = resetState(); assert.equal(cleared.initialized, false); assert.equal(memory.size, 0);
 console.log("core.test.mjs: OK");

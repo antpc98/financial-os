@@ -2,6 +2,7 @@ import { loadState, saveState, exportState, importState, resetState } from "./st
 import { ASSET_TYPES, DEBT_TYPES, METRICS, calculate, health, createSnapshot } from "./calculations.js";
 import { barChart, lineChart } from "./charts.js";
 import { buildUiState } from "./ui-state.js";
+import { renderEvolutionDom } from "./evolution-view.js";
 
 let state = loadState();
 const $ = selector => document.querySelector(selector);
@@ -54,11 +55,7 @@ function goalMetric(goal) { return METRICS[goal.metric] || goal.metric; }
 function renderEvolution(ui) {
   const points=metric=>ui.snapshots.map(s=>({date:s.snapshotDate,value:s.displayMetrics[metric]??0}));
   lineChart($("#netWorthChart"),points("netWorth"),euro); lineChart($("#debtChart"),points("totalDebt"),euro); lineChart($("#liquidityChart"),points("liquidity"),euro);
-  const timeline=ui.timeline.map(entry=>entry.kind==="real"
-    ? {date:entry.date,kind:"real",name:"Snapshot real",detail:`Patrimonio ${euro(entry.source.displayMetrics.netWorth)} · Deuda ${euro(entry.source.displayMetrics.totalDebt)} · Liquidez ${euro(entry.source.displayMetrics.liquidity)}`}
-    : {date:entry.date,kind:"target",name:entry.source.name,detail:`${goalMetric(entry.source)} ${entry.source.operator} ${entry.source.metric==="securityMonths"?`${number(entry.source.targetValue)} meses`:euro(entry.source.targetValue)}`});
-  $("#timeline").innerHTML=timeline.length?timeline.map(x=>`<article class="timeline-item ${x.kind}"><div class="timeline-top"><strong>${escapeHtml(x.name)}</strong><span class="timeline-type">${x.kind==="real"?"REAL":"OBJETIVO"}</span></div><div class="timeline-metrics">${date(x.date)} · ${x.detail}</div></article>`).join(""):empty("Crea un snapshot o un objetivo para iniciar la timeline.");
-  $("#goalsList").innerHTML=ui.goals.length?ui.goals.map(g=>`<article class="list-item"><div><div class="item-title">${escapeHtml(g.name)}</div><div class="item-meta">${goalMetric(g)} · ${date(g.targetDate)}</div></div><div class="item-value">${g.operator} ${g.metric==="securityMonths"?`${number(g.targetValue)} meses`:euro(g.targetValue)}</div><div class="item-actions"><button class="small-button" data-edit-goal="${g.id}">Editar</button><button class="small-button delete" data-delete-goal="${g.id}">Eliminar</button></div></article>`).join(""):empty("No hay objetivos configurados.");
+  renderEvolutionDom({ ui, timelineElement: $("#timeline"), goalsElement: $("#goalsList"), formatCurrency: euro, formatNumber: number, formatDate: date, metricLabel: goalMetric, escapeHtml });
 }
 
 function editAsset(item={id:"",name:"",type:"bankAccount",value:0,approximate:false}) { const f=$("#assetForm"); $("#assetDialogTitle").textContent=item.id?"Editar activo":"Añadir activo"; Object.keys(item).forEach(k=>{if(f.elements[k]) f.elements[k].type==="checkbox"?f.elements[k].checked=item[k]:f.elements[k].value=item[k]}); openModal($("#assetDialog")); }
