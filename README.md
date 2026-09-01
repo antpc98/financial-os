@@ -27,7 +27,9 @@ El repositorio contiene únicamente código y estado inicial vacío. Los activos
 - **Ahorro neto real** = balance de consumo − aportaciones de inversión − pagos de deuda.
 - Una transferencia interna se registra, pero su efecto en balance, gasto y ahorro es cero.
 - La cuota configurada en una deuda es planificación. Sólo un movimiento `debtPayment` cuenta como pago real, evitando duplicarla.
+- Un movimiento `debtPayment` registra flujo, pero nunca reduce por sí solo `outstandingBalance`; el saldo sólo cambia mediante edición o mediante un snapshot importado.
 - El fondo de seguridad es dinero reservado mediante aportes y retiradas. No suma a los activos porque puede estar ya dentro de una cuenta.
+- Los snapshots son la fuente histórica por periodo. Al importar uno posterior a la situación actual, su copia pasa a ser `current`; importar meses antiguos nunca hace retroceder el estado actual.
 
 ## Funciones
 
@@ -91,12 +93,14 @@ index.html
 css/styles.css
 js/app.js
 js/storage.js
+js/financial-state.js
 js/calculations.js
 js/charts.js
 README.md
 ```
 
 - `storage.js`: única puerta a `localStorage`, migración v2→v3, importación/exportación completa y mensual.
+- `financial-state.js`: selección temporal y reconciliación entre snapshots y situación actual.
 - `calculations.js`: patrimonio, movimientos, balances mensuales, fondo y series históricas.
 - `charts.js`: visualizaciones SVG locales.
 - `app.js`: interfaz, formularios y renderizado.

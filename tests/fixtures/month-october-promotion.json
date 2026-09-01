@@ -1,0 +1,18 @@
+{
+  "formatVersion": 1,
+  "type": "monthlyData",
+  "period": "2026-10",
+  "movements": [
+    { "id": "oct-income", "date": "2026-10-05", "description": "Ingreso de prueba", "amount": 100, "type": "income", "category": "Otros", "subcategory": "", "accountId": "", "notes": "", "source": "manual" },
+    { "id": "oct-payment", "date": "2026-10-10", "description": "Pago de prueba", "amount": 20, "type": "debtPayment", "category": "Otros", "subcategory": "", "accountId": "", "notes": "", "source": "manual" }
+  ],
+  "securityFundTransactions": [],
+  "categories": ["Otros"],
+  "snapshot": {
+    "id": "october-promotion-snapshot",
+    "snapshotDate": "2026-10-31",
+    "assets": [{ "id": "account", "name": "Cuenta de prueba", "type": "bankAccount", "value": 1300, "approximate": false }],
+    "debts": [{ "id": "loan", "name": "Deuda de prueba", "type": "personalLoan", "outstandingBalance": 950, "monthlyPayment": 20, "interestRate": 0, "endDate": "", "approximate": false }],
+    "cashFlow": { "monthlyIncome": 0, "essentialExpenses": 0, "variableExpenses": 0, "monthlyInvestment": 0 }
+  }
+}
