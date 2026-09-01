@@ -1,121 +1,31 @@
-const STORAGE_KEY = "financialOS.state.v2";
-const LEGACY_KEY = "financialOS.snapshot.sep2026";
-export const FORMAT_VERSION = 2;
+import { calculateMonthSummary, calculateSecurityFund } from "./calculations.js";
+const STORAGE_KEY="financialOS.state.v3",V2_KEY="financialOS.state.v2",LEGACY_KEY="financialOS.snapshot.sep2026";
+export const FORMAT_VERSION=3;
+export const DEFAULT_CATEGORIES=["Vivienda","Alimentación","Transporte","Salud","Suscripciones","Ocio","Restaurantes","Compras","Mascotas","Formación","Viajes","Otros"];
+const clone=value=>JSON.parse(JSON.stringify(value));
+const object=value=>value&&typeof value==="object"&&!Array.isArray(value);
+const nonNegative=value=>typeof value==="number"&&Number.isFinite(value)&&value>=0;
+const dateOk=value=>typeof value==="string"&&/^\d{4}-\d{2}-\d{2}$/.test(value)&&!Number.isNaN(Date.parse(`${value}T00:00:00`));
+const periodOk=value=>typeof value==="string"&&/^\d{4}-(0[1-9]|1[0-2])$/.test(value);
+const id=()=>crypto.randomUUID?.()||`${Date.now()}-${Math.random().toString(16).slice(2)}`;
+const emptyFlow=()=>({monthlyIncome:0,essentialExpenses:0,variableExpenses:0,monthlyInvestment:0});
+export const emptyState=()=>({formatVersion:FORMAT_VERSION,initialized:false,current:{asOfDate:new Date().toISOString().slice(0,10),assets:[],debts:[],cashFlow:emptyFlow()},snapshots:[],goals:[],movements:[],securityFundTransactions:[],categories:[...DEFAULT_CATEGORIES],monthlyPlans:{},settings:{currency:"EUR",locale:"es-ES",theme:"dark",healthRules:{fragileMaxMonths:1,stableMinMonths:3}},metadata:{createdAt:new Date().toISOString(),updatedAt:new Date().toISOString()}});
 
-export const emptyState = () => ({
-  formatVersion: FORMAT_VERSION,
-  initialized: false,
-  current: { asOfDate: new Date().toISOString().slice(0, 10), assets: [], debts: [], cashFlow: { monthlyIncome: 0, essentialExpenses: 0, variableExpenses: 0, monthlyInvestment: 0 } },
-  snapshots: [], goals: [],
-  settings: { currency: "EUR", locale: "es-ES", theme: "dark", healthRules: { fragileMaxMonths: 1, stableMinMonths: 3 } },
-  metadata: { createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() }
-});
+function validateMovement(item,path,errors){if(!object(item))return errors.push(`${path} debe ser un objeto.`);if(typeof item.id!=="string"||!item.id)errors.push(`${path}.id es obligatorio.`);if(!dateOk(item.date))errors.push(`${path}.date no es válida.`);if(typeof item.description!=="string"||!item.description.trim())errors.push(`${path}.description es obligatoria.`);if(!nonNegative(item.amount))errors.push(`${path}.amount debe ser no negativo.`);if(!["income","expense","transfer","investment","debtPayment","refund"].includes(item.type))errors.push(`${path}.type no es válido.`);}
+function validateFund(item,path,errors){if(!object(item))return errors.push(`${path} debe ser un objeto.`);if(typeof item.id!=="string"||!item.id)errors.push(`${path}.id es obligatorio.`);if(!dateOk(item.date))errors.push(`${path}.date no es válida.`);if(!["deposit","withdrawal"].includes(item.type))errors.push(`${path}.type no es válido.`);if(!nonNegative(item.amount)||item.amount===0)errors.push(`${path}.amount debe ser mayor que cero.`);}
+function validateCurrent(current,errors,path="current"){if(!object(current))return errors.push(`${path} es obligatorio.`);if(!dateOk(current.asOfDate))errors.push(`${path}.asOfDate no es válida.`);if(!Array.isArray(current.assets))errors.push(`${path}.assets debe ser una lista.`);else current.assets.forEach((a,i)=>{if(!object(a)||typeof a.name!=="string"||!nonNegative(a.value))errors.push(`${path}.assets[${i}] no es válido.`)});if(!Array.isArray(current.debts))errors.push(`${path}.debts debe ser una lista.`);else current.debts.forEach((d,i)=>{if(!object(d)||typeof d.name!=="string"||!nonNegative(d.outstandingBalance))errors.push(`${path}.debts[${i}] no es válido.`)});if(!object(current.cashFlow))errors.push(`${path}.cashFlow es obligatorio.`);}
+export function validateState(value){const errors=[];if(!object(value))return{valid:false,errors:["El JSON debe contener un objeto."]};if(value.formatVersion!==FORMAT_VERSION)errors.push(`formatVersion debe ser ${FORMAT_VERSION}.`);validateCurrent(value.current,errors);if(!Array.isArray(value.snapshots))errors.push("snapshots debe ser una lista.");else value.snapshots.forEach((s,i)=>{if(!object(s)||!dateOk(s.snapshotDate)||!Array.isArray(s.assets)||!Array.isArray(s.debts)||!object(s.cashFlow))errors.push(`snapshots[${i}] no es válido.`)});if(!Array.isArray(value.goals))errors.push("goals debe ser una lista.");if(!Array.isArray(value.movements))errors.push("movements debe ser una lista.");else value.movements.forEach((x,i)=>validateMovement(x,`movements[${i}]`,errors));if(!Array.isArray(value.securityFundTransactions))errors.push("securityFundTransactions debe ser una lista.");else value.securityFundTransactions.forEach((x,i)=>validateFund(x,`securityFundTransactions[${i}]`,errors));if(!Array.isArray(value.categories)||value.categories.some(x=>typeof x!=="string"||!x.trim()))errors.push("categories debe ser una lista de textos.");if(!object(value.monthlyPlans))errors.push("monthlyPlans debe ser un objeto.");return{valid:!errors.length,errors};}
 
-const clone = value => JSON.parse(JSON.stringify(value));
-const isObject = value => value && typeof value === "object" && !Array.isArray(value);
-const finitePositive = value => typeof value === "number" && Number.isFinite(value) && value >= 0;
-const dateOk = value => typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value) && !Number.isNaN(Date.parse(`${value}T00:00:00`));
-const id = () => globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+function normalize(state){const base=emptyState(),result={...base,...clone(state),formatVersion:FORMAT_VERSION,initialized:true};result.current={...base.current,...result.current,cashFlow:{...emptyFlow(),...(result.current?.cashFlow||{})}};result.current.assets=(result.current.assets||[]).map(a=>({...a,id:a.id||id(),approximate:Boolean(a.approximate)}));result.current.debts=(result.current.debts||[]).map(d=>({interestRate:0,endDate:"",approximate:false,monthlyPayment:0,...d,id:d.id||id()}));result.snapshots=(result.snapshots||[]).map(s=>({...s,id:s.id||id()}));result.goals=(result.goals||[]).map(g=>({...g,id:g.id||id()}));result.movements=(result.movements||[]).map(m=>({category:"Otros",subcategory:"",accountId:"",notes:"",source:"manual",...m,id:m.id||id()}));result.securityFundTransactions=(result.securityFundTransactions||[]).map(t=>({notes:"",...t,id:t.id||id()}));result.categories=[...new Set([...(result.categories||[]),"Otros"])];result.monthlyPlans=result.monthlyPlans||{};result.settings={...base.settings,...(result.settings||{}),healthRules:{...base.settings.healthRules,...(result.settings?.healthRules||{})}};return result;}
 
-function validateAsset(asset, path, errors) {
-  if (!isObject(asset)) return errors.push(`${path} debe ser un objeto.`);
-  if (typeof asset.name !== "string" || !asset.name.trim()) errors.push(`${path}.name es obligatorio.`);
-  if (!["house", "vehicle", "bankAccount", "investment", "cash", "other"].includes(asset.type)) errors.push(`${path}.type no es válido.`);
-  if (!finitePositive(asset.value)) errors.push(`${path}.value debe ser un número igual o mayor que cero.`);
-  if (asset.approximate !== undefined && typeof asset.approximate !== "boolean") errors.push(`${path}.approximate debe ser true o false.`);
-}
-function validateDebt(debt, path, errors) {
-  if (!isObject(debt)) return errors.push(`${path} debe ser un objeto.`);
-  if (typeof debt.name !== "string" || !debt.name.trim()) errors.push(`${path}.name es obligatorio.`);
-  if (!["mortgage", "personalLoan", "vehicleLoan", "credit", "deferredPurchase", "other"].includes(debt.type)) errors.push(`${path}.type no es válido.`);
-  ["outstandingBalance", "monthlyPayment", "interestRate"].forEach(key => { if (!finitePositive(debt[key] ?? 0)) errors.push(`${path}.${key} debe ser un número igual o mayor que cero.`); });
-  if (debt.endDate && !dateOk(debt.endDate)) errors.push(`${path}.endDate no es una fecha válida.`);
-}
-function validateCashFlow(flow, path, errors) {
-  if (!isObject(flow)) return errors.push(`${path} debe ser un objeto.`);
-  ["monthlyIncome", "essentialExpenses", "variableExpenses", "monthlyInvestment"].forEach(key => { if (!finitePositive(flow[key])) errors.push(`${path}.${key} debe ser un número igual o mayor que cero.`); });
-}
-
-export function validateState(value) {
-  const errors = [];
-  if (!isObject(value)) return { valid: false, errors: ["El JSON debe contener un objeto."] };
-  if (value.formatVersion !== FORMAT_VERSION) errors.push(`formatVersion debe ser ${FORMAT_VERSION}.`);
-  if (!isObject(value.current)) errors.push("current es obligatorio.");
-  else {
-    if (!dateOk(value.current.asOfDate)) errors.push("current.asOfDate debe usar YYYY-MM-DD.");
-    if (!Array.isArray(value.current.assets)) errors.push("current.assets debe ser una lista."); else value.current.assets.forEach((x, i) => validateAsset(x, `current.assets[${i}]`, errors));
-    if (!Array.isArray(value.current.debts)) errors.push("current.debts debe ser una lista."); else value.current.debts.forEach((x, i) => validateDebt(x, `current.debts[${i}]`, errors));
-    validateCashFlow(value.current.cashFlow, "current.cashFlow", errors);
-  }
-  if (!Array.isArray(value.snapshots)) errors.push("snapshots debe ser una lista.");
-  else value.snapshots.forEach((snapshot, i) => {
-    const path = `snapshots[${i}]`;
-    if (!isObject(snapshot)) return errors.push(`${path} debe ser un objeto.`);
-    if (!dateOk(snapshot.snapshotDate)) errors.push(`${path}.snapshotDate no es válido.`);
-    if (!Array.isArray(snapshot.assets)) errors.push(`${path}.assets debe ser una lista.`); else snapshot.assets.forEach((x, j) => validateAsset(x, `${path}.assets[${j}]`, errors));
-    if (!Array.isArray(snapshot.debts)) errors.push(`${path}.debts debe ser una lista.`); else snapshot.debts.forEach((x, j) => validateDebt(x, `${path}.debts[${j}]`, errors));
-    validateCashFlow(snapshot.cashFlow, `${path}.cashFlow`, errors);
-  });
-  if (!Array.isArray(value.goals)) errors.push("goals debe ser una lista.");
-  else value.goals.forEach((goal, i) => {
-    const path = `goals[${i}]`;
-    if (!isObject(goal)) return errors.push(`${path} debe ser un objeto.`);
-    if (typeof goal.name !== "string" || !goal.name.trim()) errors.push(`${path}.name es obligatorio.`);
-    if (!["netWorth", "totalAssets", "totalDebt", "nonMortgageDebt", "liquidity", "investments", "securityMonths", "monthlySavings"].includes(goal.metric)) errors.push(`${path}.metric no es válida.`);
-    if (![">=", "<="].includes(goal.operator)) errors.push(`${path}.operator no es válido.`);
-    if (!finitePositive(goal.targetValue)) errors.push(`${path}.targetValue debe ser un número no negativo.`);
-    if (!dateOk(goal.targetDate)) errors.push(`${path}.targetDate no es válida.`);
-  });
-  if (value.settings && (!isObject(value.settings) || !isObject(value.settings.healthRules) || !finitePositive(value.settings.healthRules.fragileMaxMonths) || !finitePositive(value.settings.healthRules.stableMinMonths) || value.settings.healthRules.stableMinMonths <= value.settings.healthRules.fragileMaxMonths)) errors.push("settings.healthRules contiene umbrales no válidos.");
-  return { valid: errors.length === 0, errors };
-}
-
-function normalize(state) {
-  const base = emptyState();
-  const result = { ...base, ...clone(state), initialized: true };
-  result.current.assets = result.current.assets.map(a => ({ ...a, id: a.id || id(), approximate: Boolean(a.approximate) }));
-  result.current.debts = result.current.debts.map(d => ({ interestRate: 0, endDate: "", approximate: false, ...d, id: d.id || id() }));
-  result.snapshots = (result.snapshots || []).map(s => ({ ...s, id: s.id || id() }));
-  result.goals = (result.goals || []).map(g => ({ ...g, id: g.id || id() }));
-  result.settings = { ...base.settings, ...(result.settings || {}), healthRules: { ...base.settings.healthRules, ...(result.settings?.healthRules || {}) } };
-  return result;
-}
-
-function convertV1(data) {
-  if (data.formatVersion !== 1 || !dateOk(data.snapshotDate) || !isObject(data.assets) || !isObject(data.liabilities) || !isObject(data.income)) return null;
-  const state = emptyState();
-  state.current.asOfDate = data.snapshotDate;
-  const addAsset = (name, type, value) => { if (finitePositive(value) && value > 0) state.current.assets.push({ id: id(), name, type, value, approximate: false }); };
-  addAsset("Vivienda", "house", data.assets.house); addAsset("Vehículo", "vehicle", data.assets.car); addAsset("Inversiones", "investment", data.assets.investments);
-  if (!Array.isArray(data.assets.bankAccounts || [])) throw new Error("assets.bankAccounts debe ser una lista.");
-  data.assets.bankAccounts.forEach((account, index) => {
-    const value = isObject(account) ? account.value : account;
-    if (!finitePositive(value)) throw new Error(`assets.bankAccounts[${index}] no es válido.`);
-    addAsset(isObject(account) && account.name ? account.name : `Cuenta ${index + 1}`, "bankAccount", value);
-  });
-  const addDebt = (name, type, value) => { if (finitePositive(value) && value > 0) state.current.debts.push({ id: id(), name, type, outstandingBalance: value, monthlyPayment: 0, interestRate: 0, endDate: "", approximate: false }); };
-  addDebt("Hipoteca", "mortgage", data.liabilities.mortgage);
-  if (!Array.isArray(data.liabilities.loans || [])) throw new Error("liabilities.loans debe ser una lista.");
-  data.liabilities.loans.forEach((loan, index) => {
-    const value = isObject(loan) ? (loan.outstandingBalance ?? loan.value) : loan;
-    if (!finitePositive(value)) throw new Error(`liabilities.loans[${index}] no es válido.`);
-    addDebt(isObject(loan) && loan.name ? loan.name : `Préstamo ${index + 1}`, "personalLoan", value);
-  });
-  if (!finitePositive(data.income.monthlyNet)) throw new Error("income.monthlyNet debe ser un número igual o mayor que cero.");
-  state.current.cashFlow.monthlyIncome = data.income.monthlyNet;
-  return state;
-}
-
-export function loadState() {
-  try { const raw = localStorage.getItem(STORAGE_KEY); if (!raw) return emptyState(); const parsed = JSON.parse(raw); return validateState(parsed).valid ? normalize(parsed) : emptyState(); }
-  catch { return emptyState(); }
-}
-export function saveState(state) { const safe = normalize(state); safe.metadata.updatedAt = new Date().toISOString(); localStorage.setItem(STORAGE_KEY, JSON.stringify(safe)); return safe; }
-export function exportState(state) { return JSON.stringify({ ...clone(state), formatVersion: FORMAT_VERSION, exportedAt: new Date().toISOString() }, null, 2); }
-export function importState(text) {
-  let parsed; try { parsed = JSON.parse(text); } catch { throw new Error("El archivo no contiene JSON válido."); }
-  if (parsed.formatVersion === 1) parsed = convertV1(parsed);
-  const check = validateState(parsed); if (!check.valid) throw new Error(check.errors.slice(0, 4).join(" "));
-  return saveState(parsed);
-}
-export function resetState() { localStorage.removeItem(STORAGE_KEY); localStorage.removeItem(LEGACY_KEY); return emptyState(); }
+export function migrateV2ToV3(v2){if(v2?.formatVersion!==2)throw new Error("El backup no es un estado v2.");const state=emptyState(),period=String(v2.current?.asOfDate||state.current.asOfDate).slice(0,7);state.initialized=v2.initialized!==false;state.current=clone(v2.current);state.snapshots=clone(v2.snapshots||[]);state.goals=clone(v2.goals||[]);state.settings={...state.settings,...clone(v2.settings||{}),healthRules:{...state.settings.healthRules,...clone(v2.settings?.healthRules||{})}};state.metadata={...state.metadata,...clone(v2.metadata||{}),migratedFrom:2,migratedAt:new Date().toISOString()};state.monthlyPlans[period]=clone(v2.current?.cashFlow||emptyFlow());return normalize(state);}
+function convertCompactV1(data){if(data?.formatVersion!==1||!dateOk(data.snapshotDate)||!object(data.assets)||!object(data.liabilities)||!object(data.income))throw new Error("El snapshot v1 no es válido.");const v2={formatVersion:2,initialized:true,current:{asOfDate:data.snapshotDate,assets:[],debts:[],cashFlow:{...emptyFlow(),monthlyIncome:Number(data.income.monthlyNet)||0}},snapshots:[],goals:[]};const addAsset=(name,type,value)=>{if(nonNegative(value)&&value>0)v2.current.assets.push({id:id(),name,type,value,approximate:false})};addAsset("Vivienda","house",data.assets.house);addAsset("Vehículo","vehicle",data.assets.car);addAsset("Inversiones","investment",data.assets.investments);(data.assets.bankAccounts||[]).forEach((a,i)=>addAsset(a.name||`Cuenta ${i+1}`,"bankAccount",a.value??a));const addDebt=(name,type,value)=>{if(nonNegative(value)&&value>0)v2.current.debts.push({id:id(),name,type,outstandingBalance:value,monthlyPayment:0,interestRate:0,endDate:"",approximate:false})};addDebt("Hipoteca","mortgage",data.liabilities.mortgage);(data.liabilities.loans||[]).forEach((d,i)=>addDebt(d.name||`Préstamo ${i+1}`,"personalLoan",d.outstandingBalance??d.value??d));return migrateV2ToV3(v2);}
+export function migrateState(data){if(data?.formatVersion===FORMAT_VERSION)return normalize(data);if(data?.formatVersion===2)return migrateV2ToV3(data);if(data?.formatVersion===1&&!data.type)return convertCompactV1(data);throw new Error("Versión de backup no compatible.");}
+export function loadState(){try{const v3=localStorage.getItem(STORAGE_KEY);if(v3){const parsed=JSON.parse(v3),check=validateState(parsed);return check.valid?normalize(parsed):emptyState();}const v2=localStorage.getItem(V2_KEY);if(v2){const migrated=migrateV2ToV3(JSON.parse(v2));return saveState(migrated);}return emptyState();}catch(error){console.error("Financial OS: no se pudo cargar el estado.",error);return emptyState();}}
+export function saveState(state){const safe=normalize(state),check=validateState(safe);if(!check.valid)throw new Error(check.errors.slice(0,5).join(" "));safe.metadata.updatedAt=new Date().toISOString();localStorage.setItem(STORAGE_KEY,JSON.stringify(safe));return safe;}
+export function exportState(state){return JSON.stringify({...clone(state),formatVersion:FORMAT_VERSION,exportedAt:new Date().toISOString()},null,2);}
+export function importState(text){let parsed;try{parsed=typeof text==="string"?JSON.parse(text):clone(text);}catch{throw new Error("El archivo no contiene JSON válido.");}const migrated=migrateState(parsed),check=validateState(migrated);if(!check.valid)throw new Error(check.errors.slice(0,5).join(" "));return saveState(migrated);}
+export function validateMonthImport(data){const errors=[];if(!object(data)||data.formatVersion!==1||data.type!=="monthlyData")errors.push("No es un archivo mensual compatible.");if(!periodOk(data?.period))errors.push("period debe usar YYYY-MM.");if(!Array.isArray(data?.movements))errors.push("movements debe ser una lista.");else data.movements.forEach((x,i)=>{validateMovement(x,`movements[${i}]`,errors);if(dateOk(x.date)&&x.date.slice(0,7)!==data.period)errors.push(`movements[${i}] no pertenece al periodo.`)});if(data?.securityFundTransactions!==undefined&&!Array.isArray(data.securityFundTransactions))errors.push("securityFundTransactions debe ser una lista.");else(data?.securityFundTransactions||[]).forEach((x,i)=>validateFund(x,`securityFundTransactions[${i}]`,errors));if(data?.snapshot&&(!dateOk(data.snapshot.snapshotDate)||data.snapshot.snapshotDate.slice(0,7)!==data.period))errors.push("El snapshot no pertenece al periodo.");return{valid:!errors.length,errors};}
+export function exportMonth(state,period){if(!periodOk(period))throw new Error("Periodo no válido.");const movements=state.movements.filter(x=>x.date.slice(0,7)===period),fund=state.securityFundTransactions.filter(x=>x.date.slice(0,7)===period),snapshots=state.snapshots.filter(x=>x.snapshotDate.slice(0,7)===period).sort((a,b)=>a.snapshotDate.localeCompare(b.snapshotDate));return JSON.stringify({formatVersion:1,type:"monthlyData",period,movements:clone(movements),securityFundTransactions:clone(fund),summary:calculateMonthSummary(movements,period),categories:clone(state.categories),snapshot:snapshots.at(-1)||null,exportedAt:new Date().toISOString()},null,2);}
+export function importMonth(state,input){let data;try{data=typeof input==="string"?JSON.parse(input):clone(input);}catch{throw new Error("El archivo mensual no contiene JSON válido.");}const check=validateMonthImport(data);if(!check.valid)throw new Error(check.errors.slice(0,5).join(" "));const next=normalize(state),movementIds=new Set(next.movements.map(x=>x.id)),fundIds=new Set(next.securityFundTransactions.map(x=>x.id)),snapshotIds=new Set(next.snapshots.map(x=>x.id));let addedMovements=0,addedFund=0,snapshotImported=false;for(const item of data.movements){if(!movementIds.has(item.id)){next.movements.push(item);movementIds.add(item.id);addedMovements++;}}for(const item of data.securityFundTransactions||[]){if(!fundIds.has(item.id)){next.securityFundTransactions.push(item);fundIds.add(item.id);addedFund++;}}if(data.snapshot&&!snapshotIds.has(data.snapshot.id)){next.snapshots.push(data.snapshot);snapshotImported=true;}next.categories=[...new Set([...next.categories,...(data.categories||[])])];const saved=saveState(next),summary=calculateMonthSummary(saved.movements,data.period);return{state:saved,report:{period:data.period,addedMovements,skippedMovements:data.movements.length-addedMovements,addedFund,snapshotImported,summary,securityFundBalance:calculateSecurityFund(saved.securityFundTransactions)}};}
+export function resetState(){localStorage.removeItem(STORAGE_KEY);localStorage.removeItem(V2_KEY);localStorage.removeItem(LEGACY_KEY);return emptyState();}

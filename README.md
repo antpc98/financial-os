@@ -1,6 +1,6 @@
-# Financial OS v0.2
+# Financial OS v0.3 — Monthly Tracking
 
-Aplicación web estática, mobile-first y *privacy-first* para mantener una fotografía financiera, calcular indicadores y comparar snapshots reales con objetivos. No requiere cuenta, backend ni compilación.
+Aplicación web estática, mobile-first y *privacy-first* para gestionar patrimonio, movimientos diarios, balances mensuales, fondo de seguridad y evolución histórica. No requiere cuenta, backend ni compilación.
 
 ## Privacidad y arquitectura
 
@@ -21,14 +21,27 @@ El repositorio contiene únicamente código y estado inicial vacío. Los activos
 
 `localStorage` no cifra los datos y está vinculado al navegador, dispositivo y origen web. Alguien con acceso a tu perfil podría leerlos. Borrar los datos del sitio o usar modo privado puede eliminarlos: exporta backups periódicamente.
 
+## Semántica mensual
+
+- **Balance de consumo** = ingresos + reembolsos − gastos de consumo.
+- **Ahorro neto real** = balance de consumo − aportaciones de inversión − pagos de deuda.
+- Una transferencia interna se registra, pero su efecto en balance, gasto y ahorro es cero.
+- La cuota configurada en una deuda es planificación. Sólo un movimiento `debtPayment` cuenta como pago real, evitando duplicarla.
+- El fondo de seguridad es dinero reservado mediante aportes y retiradas. No suma a los activos porque puede estar ya dentro de una cuenta.
+
 ## Funciones
 
-- Dashboard con patrimonio, activos, pasivos, liquidez, fondo de seguridad, deuda, inversiones, ingresos, ahorro y meses de cobertura.
+- Dashboard mensual con liquidez actual destacada, patrimonio, balance, ahorro y categorías.
+- Registro rápido de ingresos, gastos, transferencias, inversión, pagos de deuda y reembolsos.
+- Las transferencias internas no cuentan como gasto; inversión y deuda se separan del consumo.
+- Fondo de seguridad manual con aportes y retiradas, sin duplicar el patrimonio.
+- Selector mensual global y flujo planificado frente a real.
 - Alta, edición y eliminación de activos y deudas.
 - Flujo mensual y tasa de ahorro calculados.
 - Snapshots históricos mediante copias profundas inmutables.
 - Objetivos y timeline que diferencia `REAL` de `OBJETIVO`.
-- Gráficas SVG sin dependencias externas y semáforo configurable.
+- Gráficas SVG Día/Mes/Año sin puntos inventados y semáforo configurable.
+- Importación/exportación mensual JSON y exportación de movimientos JSON/CSV.
 - Importación validada, exportación completa, borrado local, responsive desde 320 px y tema claro/oscuro.
 
 ## Ejecutar localmente
@@ -45,7 +58,7 @@ Abre `http://localhost:8000`. También sirve cualquier servidor estático equiva
 
 En la primera ejecución elige **Importar snapshot JSON** o **Empezar desde cero**. Las operaciones también están en **Datos**.
 
-El backup nativo usa `formatVersion: 2` e incluye todo el estado. También se admite este snapshot compacto v1 con valores neutros:
+El backup nativo usa `formatVersion: 3`. Los backups completos v2 se migran automáticamente y de forma no destructiva: movimientos y operaciones del fondo empiezan vacíos, mientras activos, deudas, snapshots y objetivos se conservan. También se admite este snapshot compacto v1 con valores neutros:
 
 ```json
 {
@@ -83,8 +96,8 @@ js/charts.js
 README.md
 ```
 
-- `storage.js`: única puerta a `localStorage`, validación, importación, exportación y reset.
-- `calculations.js`: KPIs, salud financiera y snapshots.
+- `storage.js`: única puerta a `localStorage`, migración v2→v3, importación/exportación completa y mensual.
+- `calculations.js`: patrimonio, movimientos, balances mensuales, fondo y series históricas.
 - `charts.js`: visualizaciones SVG locales.
 - `app.js`: interfaz, formularios y renderizado.
 
@@ -98,8 +111,8 @@ README.md
 ## Roadmap
 
 - v0.1 — Snapshot financiero
-- **v0.2 — Privacy-first + dashboard**
-- v0.3 — Movimientos y categorización
+- v0.2 — Privacy-first + dashboard
+- **v0.3 — Movimientos y categorización**
 - v0.4 — Presupuestos
 - v0.5 — Alertas
 - v1.0 — Financial OS estable

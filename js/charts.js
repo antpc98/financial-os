@@ -4,8 +4,8 @@ export function chartDate(value) {
   return match ? `${match[3]}/${match[2]}/${match[1]}` : String(value);
 }
 export function barChart(container, items, formatter) {
-  const max = Math.max(...items.map(x => Math.abs(x.value)), 1); const width = 320, height = 145;
-  container.innerHTML = `<svg viewBox="0 0 ${width} ${height}" role="img"><title>Comparación de ${items.map(x => esc(x.label)).join(" y ")}</title>${items.map((x,i)=>{const w=85,h=Math.max(2,Math.abs(x.value)/max*82),left=35+i*150,top=100-h;return `<rect x="${left}" y="${top}" width="${w}" height="${h}" rx="7" fill="${x.color}"/><text x="${left+w/2}" y="120" text-anchor="middle">${esc(x.label)}</text><text x="${left+w/2}" y="137" text-anchor="middle">${esc(formatter(x.value))}</text>`}).join("")}</svg>`;
+  const max=Math.max(...items.map(x=>Math.abs(x.value)),1),width=340,height=135,barMax=210;
+  container.innerHTML=`<svg viewBox="0 0 ${width} ${height}" role="img"><title>Comparación proporcional de ${items.map(x=>esc(x.label)).join(" y ")}</title>${items.map((x,i)=>{const y=18+i*46,w=Math.max(2,Math.abs(x.value)/max*barMax);return `<text x="4" y="${y+13}">${esc(x.label)}</text><rect x="88" y="${y}" width="${w}" height="20" rx="7" fill="${x.color}"/><text x="${Math.min(332,94+w)}" y="${y+14}">${esc(formatter(x.value))}</text>`}).join("")}<text x="4" y="125">Diferencia · ${esc(formatter((items[0]?.value||0)-(items[1]?.value||0)))}</text></svg>`;
 }
 export function lineChart(container, points, formatter) {
   if (!points.length) { container.innerHTML = '<div class="empty-state">Crea snapshots u objetivos para ver la evolución.</div>'; return; }

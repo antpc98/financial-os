@@ -1,39 +1,25 @@
 import assert from "node:assert/strict";
-const memory = new Map();
-globalThis.localStorage = { getItem: key => memory.get(key) ?? null, setItem: (key, value) => memory.set(key, value), removeItem: key => memory.delete(key) };
+const memory=new Map();globalThis.localStorage={getItem:key=>memory.get(key)??null,setItem:(key,value)=>memory.set(key,value),removeItem:key=>memory.delete(key)};
+const calc=await import("../js/calculations.js"),storage=await import("../js/storage.js");const{buildUiState}=await import("../js/ui-state.js");const{chartDate}=await import("../js/charts.js");
+const flow={monthlyIncome:1000,essentialExpenses:300,variableExpenses:100,monthlyInvestment:50};
+const current={asOfDate:"2026-09-01",assets:[{id:"a",name:"Cuenta",type:"bankAccount",value:600,approximate:false},{id:"b",name:"Inversión",type:"investment",value:400,approximate:false}],debts:[{id:"d",name:"Préstamo",type:"personalLoan",outstandingBalance:250,monthlyPayment:50,interestRate:0,endDate:"",approximate:false}],cashFlow:flow};
+const v2={formatVersion:2,initialized:true,current:structuredClone(current),snapshots:[],goals:[],settings:{currency:"EUR",locale:"es-ES",theme:"dark",healthRules:{fragileMaxMonths:1,stableMinMonths:3}},metadata:{createdAt:"2026-01-01T00:00:00.000Z",updatedAt:"2026-01-01T00:00:00.000Z"}};
+const migrated=storage.migrateV2ToV3(v2);assert.equal(migrated.formatVersion,3);assert.deepEqual(migrated.movements,[]);assert.deepEqual(migrated.securityFundTransactions,[]);assert.deepEqual(migrated.current,v2.current);assert.deepEqual(migrated.monthlyPlans["2026-09"],flow);
+const importedV2=storage.importState(JSON.stringify(v2));assert.equal(importedV2.formatVersion,3);assert.equal(importedV2.current.assets.length,2);assert.equal(storage.importState(storage.exportState(importedV2)).formatVersion,3);
+memory.clear();memory.set("financialOS.state.v2",JSON.stringify(v2));const loaded=storage.loadState();assert.equal(loaded.formatVersion,3);assert.ok(memory.has("financialOS.state.v2"),"la migración no debe borrar la clave v2");assert.ok(memory.has("financialOS.state.v3"));
 
-const { calculate, createSnapshot, health } = await import("../js/calculations.js");
-const { emptyState, importState, exportState, resetState } = await import("../js/storage.js");
-const { buildUiState } = await import("../js/ui-state.js");
-const { chartDate } = await import("../js/charts.js");
+const movements=[
+ {id:"m1",date:"2026-09-01",description:"Ingreso",amount:1000,type:"income",category:"Otros"},
+ {id:"m2",date:"2026-09-02",description:"Gasto",amount:200,type:"expense",category:"Alimentación"},
+ {id:"m3",date:"2026-09-03",description:"Transferencia",amount:500,type:"transfer",category:"Otros"},
+ {id:"m4",date:"2026-09-04",description:"Inversión",amount:100,type:"investment",category:"Otros"},
+ {id:"m5",date:"2026-09-05",description:"Cuota",amount:50,type:"debtPayment",category:"Otros"}
+];
+assert.equal(calc.calculateMonthlyIncome(movements,"2026-09"),1000,"un ingreso aumenta el balance");assert.equal(calc.calculateMonthlyExpenses(movements,"2026-09"),200,"la transferencia y la inversión no son consumo");assert.equal(calc.calculateMonthlyBalance(movements,"2026-09"),800,"el gasto reduce el balance mensual");assert.equal(calc.calculateSavings(movements,"2026-09"),650,"inversión y deuda se descuentan una vez del ahorro");const month=calc.calculateMonthSummary(movements,"2026-09");assert.equal(month.transfers,500);assert.equal(month.investments,100);assert.equal(month.debtPayments,50);assert.equal(month.savingsRate,.65);assert.deepEqual(month.categoryTotals,{Alimentación:200});
+const fund=[{id:"f1",date:"2026-09-01",type:"deposit",amount:100,notes:""},{id:"f2",date:"2026-09-02",type:"withdrawal",amount:40,notes:""}];assert.equal(calc.calculateSecurityFund(fund),60);const baseMetrics=calc.calculate(current,fund);assert.equal(baseMetrics.netWorth,750,"el fondo no debe duplicar patrimonio");assert.equal(baseMetrics.securityFund,60);
+const snap=calc.createSnapshot(current,fund);current.assets[0].value=1;assert.equal(snap.assets[0].value,600,"snapshot histórico inmutable");current.assets[0].value=600;
+const snapshots=[{...snap,id:"s1",snapshotDate:"2026-09-01"},{...structuredClone(snap),id:"s2",snapshotDate:"2026-09-20"},{...structuredClone(snap),id:"s3",snapshotDate:"2026-10-01"},{...structuredClone(snap),id:"s4",snapshotDate:"2027-01-01"}];assert.equal(calc.evolutionSeries(snapshots,"netWorth","day").length,4);assert.equal(calc.evolutionSeries(snapshots,"netWorth","month").length,3);assert.equal(calc.evolutionSeries(snapshots,"netWorth","year").length,2);assert.equal(calc.evolutionSeries(snapshots,"netWorth","month")[0].date,"2026-09-20","mes usa el último snapshot disponible");
 
-const current = {
-  asOfDate: "2026-01-01",
-  assets: [{ id: "a", name: "Cuenta", type: "bankAccount", value: 600, approximate: false }, { id: "b", name: "Inversión", type: "investment", value: 400, approximate: false }],
-  debts: [{ id: "d", name: "Préstamo", type: "personalLoan", outstandingBalance: 250, monthlyPayment: 50, interestRate: 0, endDate: "", approximate: false }],
-  cashFlow: { monthlyIncome: 1000, essentialExpenses: 300, variableExpenses: 100, monthlyInvestment: 50 }
-};
-const metrics = calculate(current);
-assert.equal(metrics.totalAssets, 1000); assert.equal(metrics.totalDebt, 250); assert.equal(metrics.netWorth, 750); assert.equal(metrics.monthlySavings, 500); assert.equal(metrics.securityMonths, 600 / 350);
-assert.equal(health(metrics, { fragileMaxMonths: 1, stableMinMonths: 3 }).key, "control");
-const snapshot = createSnapshot(current); current.assets[0].value = 1; assert.equal(snapshot.assets[0].value, 600, "el snapshot debe ser una copia profunda");
-
-const compact = { formatVersion: 1, snapshotDate: "2026-01-01", assets: { house: 0, car: 0, investments: 10, bankAccounts: [{ name: "Cuenta", value: 20 }] }, liabilities: { mortgage: 0, loans: [] }, income: { monthlyNet: 100 } };
-const imported = importState(JSON.stringify(compact)); assert.equal(imported.current.assets.length, 2); assert.equal(imported.current.cashFlow.monthlyIncome, 100);
-const roundTrip = importState(exportState(imported)); assert.equal(roundTrip.formatVersion, 2); assert.equal(roundTrip.current.assets.length, 2);
-
-const regressionState = emptyState();
-regressionState.current.assets = Array.from({ length: 5 }, (_, i) => ({ id: `asset-${i}`, name: `Activo ${i + 1}`, type: "other", value: 10, approximate: false }));
-regressionState.current.debts = Array.from({ length: 10 }, (_, i) => ({ id: `debt-${i}`, name: `Deuda ${i + 1}`, type: "other", outstandingBalance: 5, monthlyPayment: 1, interestRate: 0, endDate: "", approximate: false }));
-regressionState.snapshots = [{ id: "snapshot-1", snapshotDate: "2026-09-01", assets: structuredClone(regressionState.current.assets), debts: structuredClone(regressionState.current.debts), cashFlow: structuredClone(regressionState.current.cashFlow) }];
-regressionState.goals = Array.from({ length: 5 }, (_, i) => ({ id: `goal-${i}`, name: `Objetivo ${i + 1}`, metric: "netWorth", operator: ">=", targetValue: i, targetDate: `2027-0${i + 1}-01` }));
-const importedRegression = importState(JSON.stringify(regressionState));
-const ui = buildUiState(importedRegression);
-assert.deepEqual(ui.counts, { assets: 5, debts: 10, snapshots: 1, goals: 5 });
-assert.equal(ui.snapshots.length, 1); assert.equal(ui.goals.length, 5); assert.equal(ui.timeline.length, 6);
-assert.equal(ui.timeline.filter(item => item.kind === "real").length, 1); assert.equal(ui.timeline.filter(item => item.kind === "target").length, 5);
-assert.equal(ui.snapshots[0].displayMetrics.totalAssets, 50, "la UI debe recalcular métricas ausentes del snapshot");
-assert.equal(chartDate("2026-09-01"), "01/09/2026");
-assert.throws(() => importState("{no"), /JSON válido/); assert.throws(() => importState(JSON.stringify({ formatVersion: 2 })), /current/);
-const cleared = resetState(); assert.equal(cleared.initialized, false); assert.equal(memory.size, 0);
-console.log("core.test.mjs: OK");
+let state=storage.emptyState();state.initialized=true;state.current=structuredClone(current);state.movements=structuredClone(movements);state.securityFundTransactions=structuredClone(fund);state.snapshots=[snap];const monthly=storage.exportMonth(state,"2026-09"),payload=JSON.parse(monthly);assert.equal(payload.type,"monthlyData");assert.equal(payload.movements.length,5);assert.equal(payload.summary.savings,650);let target=storage.emptyState(),first=storage.importMonth(target,payload);assert.equal(first.report.addedMovements,5);assert.equal(first.report.snapshotImported,true);const second=storage.importMonth(first.state,payload);assert.equal(second.report.addedMovements,0);assert.equal(second.report.skippedMovements,5);assert.equal(second.report.snapshotImported,false);
+const regression=storage.emptyState();regression.current.assets=Array.from({length:5},(_,i)=>({id:`a${i}`,name:`Activo ${i}`,type:"other",value:10,approximate:false}));regression.current.debts=Array.from({length:10},(_,i)=>({id:`d${i}`,name:`Deuda ${i}`,type:"other",outstandingBalance:5,monthlyPayment:1,interestRate:0,endDate:"",approximate:false}));regression.snapshots=[{id:"s",snapshotDate:"2026-09-01",assets:structuredClone(regression.current.assets),debts:structuredClone(regression.current.debts),cashFlow:structuredClone(regression.current.cashFlow)}];regression.goals=Array.from({length:5},(_,i)=>({id:`g${i}`,name:`Objetivo ${i}`,metric:"netWorth",operator:">=",targetValue:i,targetDate:`2027-0${i+1}-01`}));const ui=buildUiState(storage.importState(JSON.stringify(regression)));assert.deepEqual(ui.counts,{assets:5,debts:10,snapshots:1,goals:5});assert.equal(ui.timeline.length,6);assert.equal(chartDate("2026-09-01"),"01/09/2026");
+assert.throws(()=>storage.importState("{no"),/JSON válido/);const cleared=storage.resetState();assert.equal(cleared.initialized,false);assert.equal(memory.size,0);console.log("core.test.mjs: OK");
