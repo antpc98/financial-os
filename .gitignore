@@ -1,0 +1,5 @@
+# Backups exportados por Financial OS contienen datos privados.
+financial-os-backup-*.json
+
+# Convención para snapshots o pruebas locales privadas.
+*.private.json
