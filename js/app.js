@@ -1,6 +1,7 @@
 import { loadState, saveState, exportState, importState, resetState } from "./storage.js";
 import { ASSET_TYPES, DEBT_TYPES, METRICS, calculate, health, createSnapshot } from "./calculations.js";
 import { barChart, lineChart } from "./charts.js";
+import { buildUiState } from "./ui-state.js";
 
 let state = loadState();
 const $ = selector => document.querySelector(selector);
@@ -19,6 +20,7 @@ function showView(name) { document.querySelectorAll(".view").forEach(x=>x.classL
 function openModal(dialog) { dialog.showModal(); }
 
 function render() {
+  const ui = buildUiState(state);
   document.documentElement.dataset.theme=state.settings.theme;
   const m=calculate(state.current), h=health(m,state.settings.healthRules);
   $("#currentDateLabel").textContent=`SITUACIÓN ACTUAL · ${date(state.current.asOfDate)}`;
@@ -31,9 +33,9 @@ function render() {
   const target=state.settings.healthRules.stableMinMonths, pct=Math.min(100,target?m.securityMonths/target*100:100);
   $("#securityMonths").textContent=`${number(m.securityMonths)} / ${number(target)} meses`; $("#securityProgress").style.width=`${pct}%`; $("#securityDetail").textContent=m.essentialOutflow?`${euro(m.liquidity)} disponibles para ${euro(m.essentialOutflow)} de gastos esenciales y cuotas al mes.`:"Añade gastos esenciales o cuotas para calcular la cobertura.";
   barChart($("#balanceChart"),[{label:"Activos",value:m.totalAssets,color:"var(--green)"},{label:"Pasivos",value:m.totalDebt,color:"var(--red)"}],euro);
-  renderAssets(m); renderDebts(m); renderCashflow(m); renderEvolution();
+  renderAssets(m); renderDebts(m); renderCashflow(m); renderEvolution(ui);
   $("#rulesForm").elements.fragileMaxMonths.value=state.settings.healthRules.fragileMaxMonths; $("#rulesForm").elements.stableMinMonths.value=state.settings.healthRules.stableMinMonths;
-  $("#localStatus").textContent=`${state.current.assets.length} activos · ${state.current.debts.length} deudas · ${state.snapshots.length} snapshots · ${state.goals.length} objetivos`;
+  $("#localStatus").textContent=`${ui.counts.assets} activos · ${ui.counts.debts} deudas · ${ui.counts.snapshots} snapshots · ${ui.counts.goals} objetivos`;
 }
 function renderAssets(m) {
   $("#assetsSummary").textContent=euro(m.totalAssets);
@@ -49,13 +51,14 @@ function renderCashflow(m) {
   $("#cashflowResults").innerHTML=`<article class="kpi-card"><small>Ahorro mensual</small><strong class="kpi-value ${m.monthlySavings>=0?"positive":"negative"}">${euro(m.monthlySavings)}</strong></article><article class="kpi-card"><small>Tasa de ahorro</small><strong class="kpi-value">${number(m.savingsRate*100)} %</strong></article>`;
 }
 function goalMetric(goal) { return METRICS[goal.metric] || goal.metric; }
-function renderEvolution() {
-  const sorted=[...state.snapshots].sort((a,b)=>a.snapshotDate.localeCompare(b.snapshotDate));
-  const points=metric=>sorted.map(s=>({date:s.snapshotDate,value:s.metrics?.[metric]??calculate({assets:s.assets,debts:s.debts,cashFlow:s.cashFlow})[metric]??0}));
+function renderEvolution(ui) {
+  const points=metric=>ui.snapshots.map(s=>({date:s.snapshotDate,value:s.displayMetrics[metric]??0}));
   lineChart($("#netWorthChart"),points("netWorth"),euro); lineChart($("#debtChart"),points("totalDebt"),euro); lineChart($("#liquidityChart"),points("liquidity"),euro);
-  const timeline=[...sorted.map(s=>({date:s.snapshotDate,kind:"real",name:"Snapshot real",detail:`Patrimonio ${euro(s.metrics.netWorth)} · Deuda ${euro(s.metrics.totalDebt)} · Liquidez ${euro(s.metrics.liquidity)}`})),...state.goals.map(g=>({date:g.targetDate,kind:"target",name:g.name,detail:`${goalMetric(g)} ${g.operator} ${g.metric==="securityMonths"?`${number(g.targetValue)} meses`:euro(g.targetValue)}`}))].sort((a,b)=>a.date.localeCompare(b.date));
+  const timeline=ui.timeline.map(entry=>entry.kind==="real"
+    ? {date:entry.date,kind:"real",name:"Snapshot real",detail:`Patrimonio ${euro(entry.source.displayMetrics.netWorth)} · Deuda ${euro(entry.source.displayMetrics.totalDebt)} · Liquidez ${euro(entry.source.displayMetrics.liquidity)}`}
+    : {date:entry.date,kind:"target",name:entry.source.name,detail:`${goalMetric(entry.source)} ${entry.source.operator} ${entry.source.metric==="securityMonths"?`${number(entry.source.targetValue)} meses`:euro(entry.source.targetValue)}`});
   $("#timeline").innerHTML=timeline.length?timeline.map(x=>`<article class="timeline-item ${x.kind}"><div class="timeline-top"><strong>${escapeHtml(x.name)}</strong><span class="timeline-type">${x.kind==="real"?"REAL":"OBJETIVO"}</span></div><div class="timeline-metrics">${date(x.date)} · ${x.detail}</div></article>`).join(""):empty("Crea un snapshot o un objetivo para iniciar la timeline.");
-  $("#goalsList").innerHTML=state.goals.length?state.goals.map(g=>`<article class="list-item"><div><div class="item-title">${escapeHtml(g.name)}</div><div class="item-meta">${goalMetric(g)} · ${date(g.targetDate)}</div></div><div class="item-value">${g.operator} ${g.metric==="securityMonths"?`${number(g.targetValue)} meses`:euro(g.targetValue)}</div><div class="item-actions"><button class="small-button" data-edit-goal="${g.id}">Editar</button><button class="small-button delete" data-delete-goal="${g.id}">Eliminar</button></div></article>`).join(""):empty("No hay objetivos configurados.");
+  $("#goalsList").innerHTML=ui.goals.length?ui.goals.map(g=>`<article class="list-item"><div><div class="item-title">${escapeHtml(g.name)}</div><div class="item-meta">${goalMetric(g)} · ${date(g.targetDate)}</div></div><div class="item-value">${g.operator} ${g.metric==="securityMonths"?`${number(g.targetValue)} meses`:euro(g.targetValue)}</div><div class="item-actions"><button class="small-button" data-edit-goal="${g.id}">Editar</button><button class="small-button delete" data-delete-goal="${g.id}">Eliminar</button></div></article>`).join(""):empty("No hay objetivos configurados.");
 }
 
 function editAsset(item={id:"",name:"",type:"bankAccount",value:0,approximate:false}) { const f=$("#assetForm"); $("#assetDialogTitle").textContent=item.id?"Editar activo":"Añadir activo"; Object.keys(item).forEach(k=>{if(f.elements[k]) f.elements[k].type==="checkbox"?f.elements[k].checked=item[k]:f.elements[k].value=item[k]}); openModal($("#assetDialog")); }

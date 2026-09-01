@@ -4,6 +4,7 @@ globalThis.localStorage = { getItem: key => memory.get(key) ?? null, setItem: (k
 
 const { calculate, createSnapshot, health } = await import("../js/calculations.js");
 const { emptyState, importState, exportState, resetState } = await import("../js/storage.js");
+const { buildUiState } = await import("../js/ui-state.js");
 
 const current = {
   asOfDate: "2026-01-01",
@@ -19,6 +20,18 @@ const snapshot = createSnapshot(current); current.assets[0].value = 1; assert.eq
 const compact = { formatVersion: 1, snapshotDate: "2026-01-01", assets: { house: 0, car: 0, investments: 10, bankAccounts: [{ name: "Cuenta", value: 20 }] }, liabilities: { mortgage: 0, loans: [] }, income: { monthlyNet: 100 } };
 const imported = importState(JSON.stringify(compact)); assert.equal(imported.current.assets.length, 2); assert.equal(imported.current.cashFlow.monthlyIncome, 100);
 const roundTrip = importState(exportState(imported)); assert.equal(roundTrip.formatVersion, 2); assert.equal(roundTrip.current.assets.length, 2);
+
+const regressionState = emptyState();
+regressionState.current.assets = Array.from({ length: 5 }, (_, i) => ({ id: `asset-${i}`, name: `Activo ${i + 1}`, type: "other", value: 10, approximate: false }));
+regressionState.current.debts = Array.from({ length: 10 }, (_, i) => ({ id: `debt-${i}`, name: `Deuda ${i + 1}`, type: "other", outstandingBalance: 5, monthlyPayment: 1, interestRate: 0, endDate: "", approximate: false }));
+regressionState.snapshots = [{ id: "snapshot-1", snapshotDate: "2026-09-01", assets: structuredClone(regressionState.current.assets), debts: structuredClone(regressionState.current.debts), cashFlow: structuredClone(regressionState.current.cashFlow) }];
+regressionState.goals = Array.from({ length: 5 }, (_, i) => ({ id: `goal-${i}`, name: `Objetivo ${i + 1}`, metric: "netWorth", operator: ">=", targetValue: i, targetDate: `2027-0${i + 1}-01` }));
+const importedRegression = importState(JSON.stringify(regressionState));
+const ui = buildUiState(importedRegression);
+assert.deepEqual(ui.counts, { assets: 5, debts: 10, snapshots: 1, goals: 5 });
+assert.equal(ui.snapshots.length, 1); assert.equal(ui.goals.length, 5); assert.equal(ui.timeline.length, 6);
+assert.equal(ui.timeline.filter(item => item.kind === "real").length, 1); assert.equal(ui.timeline.filter(item => item.kind === "target").length, 5);
+assert.equal(ui.snapshots[0].displayMetrics.totalAssets, 50, "la UI debe recalcular métricas ausentes del snapshot");
 assert.throws(() => importState("{no"), /JSON válido/); assert.throws(() => importState(JSON.stringify({ formatVersion: 2 })), /current/);
 const cleared = resetState(); assert.equal(cleared.initialized, false); assert.equal(memory.size, 0);
 console.log("core.test.mjs: OK");
