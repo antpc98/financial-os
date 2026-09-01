@@ -26,6 +26,7 @@ El repositorio contiene únicamente código y estado inicial vacío. Los activos
 - **Balance de consumo** = ingresos + reembolsos − gastos de consumo.
 - **Ahorro neto real** = balance de consumo − aportaciones de inversión − pagos de deuda.
 - Una transferencia interna se registra, pero su efecto en balance, gasto y ahorro es cero.
+- Cada movimiento manual requiere una cuenta líquida: ingreso y reembolso aumentan su saldo; gasto, transferencia, inversión y pago de deuda lo reducen. Editar o eliminar el movimiento revierte su ajuste.
 - La cuota configurada en una deuda es planificación. Sólo un movimiento `debtPayment` cuenta como pago real, evitando duplicarla.
 - Un movimiento `debtPayment` registra flujo, pero nunca reduce por sí solo `outstandingBalance`; el saldo sólo cambia mediante edición o mediante un snapshot importado.
 - El fondo de seguridad es dinero reservado mediante aportes y retiradas. No suma a los activos porque puede estar ya dentro de una cuenta.
